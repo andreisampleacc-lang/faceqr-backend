@@ -30,11 +30,13 @@ namespace backend.Controllers
                 var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
+                    var approvedRaw = reader["is_approved"].ToString().ToLower();
+                    bool isApproved = approvedRaw == "1" || approvedRaw == "true";
                     users.Add(new {
                         id        = reader["id"].ToString(),
                         username  = reader["username"].ToString(),
                         qrCode    = reader["qr_code"].ToString(),
-                        approved  = reader["is_approved"].ToString() == "1",
+                        approved  = isApproved,
                         hasFace   = !string.IsNullOrEmpty(reader["face_data"].ToString()),
                         createdAt = reader["created_at"].ToString()
                     });
@@ -54,7 +56,6 @@ namespace backend.Controllers
             {
                 conn.Open();
 
-                // Check duplicate username
                 var check = new MySqlCommand(
                     "SELECT COUNT(*) FROM users WHERE username=@u", conn);
                 check.Parameters.AddWithValue("@u", req.Username);
@@ -121,7 +122,10 @@ namespace backend.Controllers
 
                 if (reader.Read())
                 {
-                    if (reader["is_approved"].ToString() != "1")
+                    var approvedRaw = reader["is_approved"].ToString().ToLower();
+                    bool isApproved = approvedRaw == "1" || approvedRaw == "true";
+
+                    if (!isApproved)
                         return Unauthorized(new { error = "Account not yet approved by admin" });
 
                     return Ok(new {
@@ -145,7 +149,7 @@ namespace backend.Controllers
             {
                 conn.Open();
                 var cmd = new MySqlCommand(
-                    "SELECT username, face_data FROM users WHERE qr_code=@q AND is_approved=1",
+                    "SELECT username, face_data FROM users WHERE qr_code=@q AND (is_approved=1 OR is_approved=true)",
                     conn);
                 cmd.Parameters.AddWithValue("@q", qr);
                 var reader = cmd.ExecuteReader();
@@ -162,15 +166,12 @@ namespace backend.Controllers
             return Unauthorized(new { error = "Invalid or unrecognized QR code" });
         }
 
-        // ─── LOGIN STEP 3 — FACE (optional server-side verify) ───
+        // ─── LOGIN STEP 3 — FACE ─────────────────────────────────
         [HttpPost("login/face")]
         public IActionResult LoginFace([FromBody] FaceLoginRequest req)
         {
-            // Face matching is done client-side via face-api.js
-            // This endpoint is kept for optional server-side logging
             if (string.IsNullOrEmpty(req.StoredFace))
                 return Ok(new { status = "ACCESS_GRANTED" });
-
             return Ok(new { status = "ACCESS_GRANTED" });
         }
 
